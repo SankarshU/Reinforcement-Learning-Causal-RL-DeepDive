@@ -3,12 +3,12 @@
 A diagnostic method for evaluating an offline-trained RL agent intended for real-world deployment without environmental exploration. Essentially, this involves debugging the target model (without a simulator), given the following conditions: access to 
 
 1. observation trajectories,
-2. the true MDP, and
+2. finite MDP  and
 3. discrete states. 
 
-This method elegantly generates counterfactual trajectory samples for each observed trajectory under the target policy. It provides a method for qualitative introspection and ‘debugging’ of RL models, in settings where a domain expert could plausibly examine individual trajectories. The diagram below intuitively captures this summary.
+This method elegantly generates counterfactual trajectory samples for each observed trajectory under the target policy. It provides a method for qualitative introspection and ‘debugging’ of RL models, in settings where a domain expert could plausibly examine individual trajectories. The diagram below intuitively captures this summary for Frozen lake Gym environment.The experiment with Frozen lake is for demonstration !!! (while actual experiment is from medical domain it has been set up to be as much faithful to paper's theory and assumptions 
 
-![image](https://github.com/user-attachments/assets/08813aed-1219-4fa3-92da-91ec790de998)
+![image](https://github.com/user-attachments/assets/f2d3119f-9f48-4d6c-b39b-f395bb7e90cb)
 
 
 **Published Forum:** ICML, 2019 ,[paper](https://arxiv.org/abs/1905.05824)  
@@ -34,7 +34,6 @@ This method elegantly generates counterfactual trajectory samples for each obser
 #### My demo,Experiments with Gym
 
 - **Frozen Lake:** Include `is_slippery=True`, States: `range(0, 15)`, Actions: `{'L', 'U', 'D', 'R'}`
-  ![image](https://github.com/user-attachments/assets/0d7a042f-9f4a-40aa-9692-0bacd0cca74d)
 
 - **MDP:** MDP can be constructed from below for .is_slippery=True and below probabilities for each of action
 
@@ -53,10 +52,10 @@ P(a^* = \text{‘L’} \mid a = \text{‘L’}) = \frac{1}{3}
 $$
 
 - **Sample results:** This illustration is for demonstration only , for details please refer experiment code  
-![image](https://github.com/user-attachments/assets/84485356-9de6-467a-b67f-4efce73d1111)
+![image](https://github.com/user-attachments/assets/8f5eddce-d631-4887-88cb-6e11812c830b) ![image](https://github.com/user-attachments/assets/330ed74b-af0a-42aa-bb3a-f727b485e532)
 
 
-#### Code from Github that captures main contribution of the paper 
+#### Code from [Github](https://github.com/clinicalml/gumbel-max-scm/tree/master) that captures main contribution of the paper 
 
 ![image](https://github.com/user-attachments/assets/eab6d744-e110-4a0c-8531-b271662e8d41)
 
