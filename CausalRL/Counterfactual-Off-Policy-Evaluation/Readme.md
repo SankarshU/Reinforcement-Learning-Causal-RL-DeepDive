@@ -12,15 +12,15 @@ This method elegantly generates counterfactual trajectory samples for each obser
 
 
 **Published Forum:** ICML, 2019 ,[paper](https://arxiv.org/abs/1905.05824)  
-**Experiment Setup:** Medical Domain (Sepsis management)
+**Experiment Setup (Publication):** Medical Domain (Sepsis management)
 
-#### Key Ideas from the Paper:
+#### Key Ideas from the Publication:
 
 - **Non-Identifiability Challenge:** Given a fully-specified finite Markov Decision Process (MDP), there are multiple parameterizations of a structural causal model (SCM) which are equally compatible with the transition and reward distributions.
 - **Gumbel-Max SCM:** Based on the Gumbel-Max trick for sampling from discrete distributions, demonstrate that it satisfies the counterfactual stability condition.
 - **Reward Decomposition:** Decompose the expected difference in reward between the policies (observed and target) into differences on observed episodes over counterfactual trajectories.
 
-#### Key Theoretical Aspects (Main points to Pay Attention to While Reading the Paper):
+#### Key Theoretical Aspects (Main points to Pay Attention to While Reading the Publication):
 
 - **Reward Decomposition:** As per the equation provided in the paper.
  ![image](https://github.com/user-attachments/assets/2f8c495b-c107-4c11-b697-815d27a34b1f)
@@ -52,7 +52,7 @@ P(a^* = \text{‘D’} \mid a = \text{‘L’}) = \frac{1}{3} ;
 P(a^* = \text{‘L’} \mid a = \text{‘L’}) = \frac{1}{3}
 $$
 
-- **Sample results:** This illsuatrion is for demonstration only , for details please refer experiment code  
+- **Sample results:** This illustration is for demonstration only , for details please refer experiment code  
 ![image](https://github.com/user-attachments/assets/84485356-9de6-467a-b67f-4efce73d1111)
 
 
@@ -63,7 +63,7 @@ $$
 #### To be noted 
 - True MDP Requirements: Evaluate whether a learned MDP is sufficient, and consider the need for experimental validation and an in-depth theoretical analysis.
 - Limitations of Discrete States: Acknowledge the constraints imposed by discrete states.
-- Future Research Directions: Identify potential areas for follow-up research.
+- Future Research Directions: Identify potential areas for follow-up research, a follow up wok is [here](https://arxiv.org/abs/2111.06888).
 - I used Conservative Q-Learning (CQL) for Offline Reinforcement Learning in my experiments. A dedicated folder will cover CQL
 
 
