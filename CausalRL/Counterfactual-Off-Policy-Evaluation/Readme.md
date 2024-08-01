@@ -51,7 +51,7 @@ P(a^* = \text{‘D’} \mid a = \text{‘L’}) = \frac{1}{3} ;
 P(a^* = \text{‘L’} \mid a = \text{‘L’}) = \frac{1}{3}
 $$
 
-- **Sample results:** This illustration is for demonstration only , for details please refer experiment code  
+- **Sample results:** This illustration is for demonstration only , for details please refer [experiment code](https://github.com/SankarshU/Reinforcement-Learning-DeepDive/blob/230fb446295f6aaf2f3319de4500a12e710ed0ae/CausalRL/Codes/CF_OffPolicy_Eval/gumbel_max_scm_expt%20-%20Git/FrozenLake_Gumbel_CF_EXPT.ipynb)  
 ![image](https://github.com/user-attachments/assets/8f5eddce-d631-4887-88cb-6e11812c830b) ![image](https://github.com/user-attachments/assets/330ed74b-af0a-42aa-bb3a-f727b485e532)
 
 
