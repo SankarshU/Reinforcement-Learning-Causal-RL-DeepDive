@@ -3,7 +3,7 @@ Look at the RL paradigm at a fundamental level with relevant notes, courses, mat
 
 #### RL and Deep RL have a wealth of material available; this is one such attempt to delve deeply into the subject to help study and understand state-of-the-art research
 - The following will be covered:
-  - RL & Deep RL [fundamentals](https://github.com/SankarshU/Reinforcement-Learning-DeepDive/tree/846cc33ee84f8807abcc63b898f34d94385384aa/Basics):
+  - RL & Deep RL [[fundamentals](https://github.com/SankarshU/Reinforcement-Learning-Causal-RL-DeepDive/blob/2d9192dde95a1002dead4d40656e168cd9906b4e/Basics/Introduction.md)]:
     - Concepts and illustrations from the following courses, additional experiments beyond assignments:
       - [Berkeley Deep RL][[link](http://rll.berkeley.edu/deeprlcourse/)]
       - [Practical RL][[link](https://github.com/yandexdataschool/Practical_RL)]
