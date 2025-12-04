@@ -19,4 +19,46 @@ Look at the RL paradigm at a fundamental level with relevant notes, courses, mat
   - Reinforcement Learning, An Introduction By Richard S. Sutton and Andrew G. Barto
 
 
-    
+## Quickstart (CartPole CTRL experiments)
+
+### Setup
+1. Create/activate a Python 3.10+ venv and install deps:
+   ```bash
+   pip install torch gymnasium numpy matplotlib seaborn tqdm scikit-learn pandas
+   ```
+2. From repo root, create the SD dataset:
+   ```bash
+   python scripts/run_ctrl.py dataset --episodes 250 --horizon 200 --output data/SD_dataset_clean.pt
+   ```
+
+### Train CTRL components
+- Train BiCoGAN (for counterfactual generation):
+  ```bash
+  python scripts/run_ctrl.py train-bicogan --dataset-path data/SD_dataset_clean.pt --output-dir results/cartpole/bicogan
+  ```
+- Train offline D3QN+CQL on real-only:
+  ```bash
+  python scripts/run_ctrl.py train-d3qn --dataset-path data/SD_dataset_clean.pt --output-dir results/cartpole/d3qn_real
+  ```
+- Train offline D3QN+CQL with counterfactual augmentation:
+  ```bash
+  python scripts/run_ctrl.py train-d3qn --dataset-path data/SD_dataset_clean.pt --use-cf --cf-k 1 --bicogan-dir results/cartpole/bicogan --output-dir results/cartpole/d3qn_cf
+  ```
+
+### Alternative baselines
+- Soft Actor-Critic (offline):
+  ```bash
+  python scripts/run_alt_algos.py sac --dataset-path data/SD_dataset_clean.pt --output-dir results/cartpole/sac
+  ```
+- Rainbow DQN (C51, offline):
+  ```bash
+  python scripts/run_alt_algos.py rainbow --dataset-path data/SD_dataset_clean.pt --output-dir results/cartpole/rainbow
+  ```
+
+### Demo / recording
+Render or record any trained policy (SAC/Rainbow/D3QN) on CartPole:
+```bash
+python scripts/demo_policy.py --algo sac --model-path results/cartpole/sac/actor.pt --dataset-path data/SD_dataset_clean.pt --episodes 1
+# or record video frames:
+python scripts/demo_policy.py --algo rainbow --model-path results/cartpole/rainbow/q_net.pt --dataset-path data/SD_dataset_clean.pt --episodes 2 --record-dir results/cartpole/rainbow/videos
+```
