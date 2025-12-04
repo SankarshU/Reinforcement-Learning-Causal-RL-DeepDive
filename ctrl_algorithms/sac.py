@@ -119,16 +119,43 @@ def evaluate_sac_policy(
     state_std: torch.Tensor,
     episodes: int = 50,
     seed: int = 0,
+    use_ctrl_env: bool = True,
+    action_noise_std: float = 0.0,
 ) -> List[float]:
-    """Evaluate SAC policy on clean CartPole-v1 using deterministic actions."""
-    import gymnasium as gym
-
+    """Evaluate SAC policy using deterministic actions."""
     actor.eval()
     device = next(actor.parameters()).device
     returns: List[float] = []
-    for ep in range(episodes):
+
+    if use_ctrl_env:
+        from ctrl_data import CTRL_CartPoleSD_CLEAN
+
+        env = CTRL_CartPoleSD_CLEAN(seed=seed)
+
+        def step_env(a_cont: float):
+            a_noisy = a_cont + action_noise_std * torch.randn(()).item()
+            sp_raw, r, done, trunc, _ = env.step(a_noisy)
+            return sp_raw, r, done, trunc
+
+        def reset_env(ep_seed: int):
+            return env.reset(seed=ep_seed)[0]
+
+    else:
+        import gymnasium as gym
+
         env = gym.make("CartPole-v1")
-        s_raw, _ = env.reset(seed=seed + ep)
+
+        def step_env(a_cont: float):
+            force = (2.0 * a_cont - 1.0) * 10.0
+            a_bin = 1 if force > 0 else 0
+            sp_raw, r, done, trunc, _ = env.step(a_bin)
+            return sp_raw, r, done, trunc
+
+        def reset_env(ep_seed: int):
+            return env.reset(seed=ep_seed)[0]
+
+    for ep in range(episodes):
+        s_raw = reset_env(seed + ep)
         s = torch.tensor(s_raw, dtype=torch.float32, device=device)
         s = (s - state_mean[0].to(device)) / state_std[0].to(device)
         done = False
@@ -136,15 +163,13 @@ def evaluate_sac_policy(
         total_r = 0.0
         while not (done or trunc):
             with torch.no_grad():
-                a_cont = actor.deterministic(s.unsqueeze(0)).squeeze(0)
-            force = (2.0 * a_cont - 1.0) * 10.0
-            a_bin = 1 if force.item() > 0 else 0
-            sp_raw, r, done, trunc, _ = env.step(a_bin)
+                a_cont = actor.deterministic(s.unsqueeze(0)).squeeze(0).item()
+            sp_raw, r, done, trunc = step_env(a_cont)
             total_r += float(r)
             s = torch.tensor(sp_raw, dtype=torch.float32, device=device)
             s = (s - state_mean[0].to(device)) / state_std[0].to(device)
         returns.append(total_r)
-        env.close()
+    env.close()
     return returns
 
 
@@ -228,7 +253,13 @@ def train_sac_offline(cfg: SACConfig) -> Dict[str, Any]:
 
         if (ep + 1) % cfg.eval_every == 0 or ep == 0:
             returns = evaluate_sac_policy(
-                actor, data.state_mean, data.state_std, episodes=cfg.eval_episodes, seed=cfg.seed
+                actor,
+                data.state_mean,
+                data.state_std,
+                episodes=cfg.eval_episodes,
+                seed=cfg.seed,
+                use_ctrl_env=True,
+                action_noise_std=0.0,
             )
             metrics.setdefault("eval_returns", []).append(
                 {"epoch": ep + 1, "mean": float(sum(returns) / len(returns))}

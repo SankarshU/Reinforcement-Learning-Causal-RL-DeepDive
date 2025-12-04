@@ -254,7 +254,14 @@ def train_d3qn(cfg: D3QNCliConfig) -> Path:
         cfg.output_dir / "metrics.json",
     )
 
-    final_returns = evaluate_policy(q_net, S_mean, S_std, episodes=50)
+    final_returns = evaluate_policy(
+        q_net,
+        S_mean,
+        S_std,
+        episodes=50,
+        use_ctrl_env=True,
+        action_noise_std=0.0,
+    )
     save_json(
         {
             "mean_return": float(final_returns.mean()),
