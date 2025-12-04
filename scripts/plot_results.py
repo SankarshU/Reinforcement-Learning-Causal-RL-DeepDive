@@ -123,9 +123,12 @@ def plot_bar_comparison(results: Dict[str, Path], out_dir: Path) -> None:
             continue
         last = evals[-1]
         if isinstance(last, dict):
-            vals.append(last.get("mean", 0.0))
+            vals.append(float(last.get("mean", 0.0)))
         else:
-            vals.append(last[0])
+            try:
+                vals.append(float(last[0]))
+            except (TypeError, ValueError, IndexError):
+                continue
         labels.append(name)
     if not labels:
         print("[skip] no eval data for bar chart")
