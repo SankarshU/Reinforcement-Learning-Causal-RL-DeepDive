@@ -112,18 +112,12 @@ def _projection(
     l = l.clamp(min=0, max=n_atoms - 1)
     u = u.clamp(min=0, max=n_atoms - 1)
 
-    proj = torch.zeros_like(next_dist)
-    eq_mask = l == u
-    if eq_mask.any():
-        idx = torch.arange(batch_size, device=next_dist.device)[eq_mask]
-        proj[idx, l[eq_mask]] += next_dist[eq_mask]
-
-    neq_mask = ~eq_mask
-    if neq_mask.any():
-        idx = torch.arange(batch_size, device=next_dist.device)[neq_mask]
-        proj[idx, l[neq_mask]] += next_dist[neq_mask] * (u - b)[neq_mask]
-        proj[idx, u[neq_mask]] += next_dist[neq_mask] * (b - l)[neq_mask]
-    return proj
+    # Flattened index_add avoids advanced indexing shape issues
+    offset = torch.arange(batch_size, device=next_dist.device).unsqueeze(1) * n_atoms
+    proj = torch.zeros(batch_size * n_atoms, device=next_dist.device)
+    proj.index_add_(0, (l + offset).view(-1), (next_dist * (u - b)).view(-1))
+    proj.index_add_(0, (u + offset).view(-1), (next_dist * (b - l)).view(-1))
+    return proj.view(batch_size, n_atoms)
 
 
 def evaluate_rainbow_policy(
