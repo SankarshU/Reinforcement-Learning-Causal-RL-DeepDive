@@ -128,7 +128,10 @@ def evaluate_sac_policy(
     returns: List[float] = []
 
     if use_ctrl_env:
-        from ctrl_data import CTRL_CartPoleSD_CLEAN
+        try:
+            from CTRL.ctrl_data import CTRL_CartPoleSD_CLEAN
+        except ImportError:
+            from ctrl_data import CTRL_CartPoleSD_CLEAN
 
         env = CTRL_CartPoleSD_CLEAN(seed=seed)
 

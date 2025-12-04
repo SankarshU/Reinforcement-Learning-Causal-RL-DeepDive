@@ -41,7 +41,10 @@ def evaluate_policy(
     When use_ctrl_env=False, falls back to Gym CartPole-v1 with binary actions.
     """
     if use_ctrl_env:
-        from ctrl_data import CTRL_CartPoleSD_CLEAN
+        try:
+            from CTRL.ctrl_data import CTRL_CartPoleSD_CLEAN
+        except ImportError:
+            from ctrl_data import CTRL_CartPoleSD_CLEAN
 
         env = CTRL_CartPoleSD_CLEAN(seed=seed)
         def step_env(a_cont: float):
