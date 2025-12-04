@@ -28,16 +28,40 @@ def evaluate_policy(
     S_std: torch.Tensor,
     episodes: int = 30,
     seed: int = 0,
+    use_ctrl_env: bool = False,
+    action_noise_std: float = 0.0,
 ) -> np.ndarray:
     """
-    Evaluate the learned Q-network on clean Gym CartPole-v1.
-    Mapping:
-        idx ∈ {0..10} → a_cont ∈ [0,1] → force ∈ [-10,10]
-        force > 0 ⇒ env action 1, else 0
-    """
-    import gymnasium as gym
+    Evaluate the learned Q-network.
 
-    env = gym.make("CartPole-v1")
+    When use_ctrl_env=True, uses the CTRL CartPole dynamics and applies the
+    continuous force implied by the discrete bin (a_idx / 10.0) with optional
+    Gaussian noise before stepping. This matches the offline dataset dynamics.
+
+    When use_ctrl_env=False, falls back to Gym CartPole-v1 with binary actions.
+    """
+    if use_ctrl_env:
+        from ctrl_data import CTRL_CartPoleSD_CLEAN
+
+        env = CTRL_CartPoleSD_CLEAN(seed=seed)
+        def step_env(a_cont: float):
+            a_noisy = a_cont + action_noise_std * np.random.standard_normal()
+            sp_raw, r, done, trunc, _ = env.step(a_noisy)
+            return sp_raw, r, done, trunc
+        def reset_env(ep_seed: int):
+            return env.reset(seed=ep_seed)[0]
+    else:
+        import gymnasium as gym
+
+        env = gym.make("CartPole-v1")
+        def step_env(a_cont: float):
+            force = (2.0 * a_cont - 1.0) * 10.0
+            a_bin = 1 if force > 0 else 0
+            sp_raw, r, done, trunc, _ = env.step(a_bin)
+            return sp_raw, r, done, trunc
+        def reset_env(ep_seed: int):
+            return env.reset(seed=ep_seed)[0]
+
     q_net.eval()
     returns = []
 
@@ -45,7 +69,7 @@ def evaluate_policy(
     S_std = S_std.to(device)
 
     for ep in range(episodes):
-        s_raw, _ = env.reset(seed=seed + ep)
+        s_raw = reset_env(seed + ep)
         s = torch.tensor(s_raw, dtype=torch.float32, device=device)
         s = (s - S_mean[0]) / S_std[0]
 
@@ -59,10 +83,8 @@ def evaluate_policy(
                 a_idx = q_vals.argmax(dim=1).item()  # 0..10
 
             a_cont = a_idx / 10.0                    # ∈ [0,1]
-            force = (2.0 * a_cont - 1.0) * 10.0      # [-10, 10]
-            a_bin = 1 if force > 0 else 0            # CartPole-v1 expects 0/1
 
-            sp_raw, r, done, trunc, _ = env.step(a_bin)
+            sp_raw, r, done, trunc = step_env(a_cont)
             total_r += r
 
             s = torch.tensor(sp_raw, dtype=torch.float32, device=device)

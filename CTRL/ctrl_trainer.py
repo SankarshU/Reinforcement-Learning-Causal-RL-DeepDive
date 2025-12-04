@@ -310,8 +310,8 @@ def train_offline_d3qn(
     hyper: D3QNHyperParams,
     S_mean: torch.Tensor,
     S_std: torch.Tensor,
-        eval_every: int = 20,
-        label: str = "Offline D3QN+CQL",
+    eval_every: int = 20,
+    label: str = "Offline D3QN+CQL",
 ):
     print(f"\n========== OFFLINE D3QN TRAINING: {label} ==========")
 
@@ -438,7 +438,14 @@ def train_offline_d3qn(
                 f"Qmean={Q_means[-1]:.3f} | Qstd={Q_stds[-1]:.3f}"
             )
 
-            eval_returns = evaluate_policy(q_net, S_mean, S_std, episodes=50)
+            eval_returns = evaluate_policy(
+                q_net,
+                S_mean,
+                S_std,
+                episodes=50,
+                use_ctrl_env=True,
+                action_noise_std=0.0,
+            )
             print(
                 f"   ▶ Eval Return Mean = {eval_returns.mean():.2f}, "
                 f"Std = {eval_returns.std():.2f}"
