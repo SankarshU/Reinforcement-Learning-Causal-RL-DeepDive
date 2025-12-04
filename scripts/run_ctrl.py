@@ -217,6 +217,27 @@ def train_d3qn(cfg: D3QNCliConfig) -> Path:
     )
 
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
+    eval_records = []
+    for entry in evals:
+        if isinstance(entry, dict):
+            eval_records.append(
+                {
+                    "epoch": int(entry.get("epoch", 0)),
+                    "mean": float(entry.get("mean", 0.0)),
+                    "std": float(entry.get("std", 0.0)),
+                }
+            )
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            try:
+                eval_records.append(
+                    {
+                        "epoch": len(eval_records) + 1,
+                        "mean": float(entry[0]),
+                        "std": float(entry[1]),
+                    }
+                )
+            except (TypeError, ValueError):
+                continue
     torch.save(q_net.state_dict(), cfg.output_dir / "q_net.pt")
     save_json(asdict(cfg), cfg.output_dir / "config.json")
     save_json(
@@ -233,7 +254,7 @@ def train_d3qn(cfg: D3QNCliConfig) -> Path:
         cfg.output_dir / "metrics.json",
     )
 
-    final_returns = evaluate_policy(q_net, S_mean, S_std, episodes=20)
+    final_returns = evaluate_policy(q_net, S_mean, S_std, episodes=50)
     save_json(
         {
             "mean_return": float(final_returns.mean()),
