@@ -242,9 +242,9 @@ class D3QNHyperParams:
     epochs: int = 1000
     gamma: float = 0.99
     batch_size: int = 512
-    lr: float = 1.5e-4
+    lr: float = 1.0e-4
     tau: float = 0.005                 # target update rate
-    alpha_cql: float = 0.02            # CQL weight
+    alpha_cql: float = 0.05            # CQL weight
     reward_clip: Optional[float] = None
     target_clip: Optional[float] = 500.0
     max_grad_norm: Optional[float] = 1.0

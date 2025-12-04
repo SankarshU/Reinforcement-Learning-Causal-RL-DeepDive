@@ -26,7 +26,7 @@ def _save_json(payload: Dict[str, Any], path: Path) -> None:
 
 
 class RainbowNet(nn.Module):
-    """Dueling C51 network for discrete actions."""
+    """Dueling C51 network with noisy layers for discrete actions."""
 
     def __init__(
         self,
@@ -35,6 +35,7 @@ class RainbowNet(nn.Module):
         n_atoms: int = 51,
         v_min: float = -10.0,
         v_max: float = 10.0,
+        noisy_std: float = 0.5,
     ):
         super().__init__()
         self.n_actions = n_actions
@@ -45,9 +46,9 @@ class RainbowNet(nn.Module):
 
         hidden = 256
         self.fc1 = nn.Linear(state_dim, hidden)
-        self.fc2 = nn.Linear(hidden, hidden)
-        self.adv = nn.Linear(hidden, n_actions * n_atoms)
-        self.val = nn.Linear(hidden, n_atoms)
+        self.fc2 = NoisyLinear(hidden, hidden, sigma_init=noisy_std)
+        self.adv = NoisyLinear(hidden, n_actions * n_atoms, sigma_init=noisy_std)
+        self.val = NoisyLinear(hidden, n_atoms, sigma_init=noisy_std)
 
     def _dist(self, x: torch.Tensor) -> torch.Tensor:
         h = F.relu(self.fc1(x))
@@ -69,6 +70,51 @@ class RainbowNet(nn.Module):
         return torch.sum(probs * support, dim=-1)
 
 
+class NoisyLinear(nn.Module):
+    """Factorized noisy layer with deterministic output when eval()."""
+
+    def __init__(self, in_features: int, out_features: int, sigma_init: float = 0.5):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.weight_mu = nn.Parameter(torch.empty(out_features, in_features))
+        self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features))
+        self.register_buffer("weight_eps", torch.empty(out_features, in_features))
+
+        self.bias_mu = nn.Parameter(torch.empty(out_features))
+        self.bias_sigma = nn.Parameter(torch.empty(out_features))
+        self.register_buffer("bias_eps", torch.empty(out_features))
+
+        self.reset_parameters(sigma_init)
+        self.reset_noise()
+
+    def reset_parameters(self, sigma_init: float) -> None:
+        mu_range = 1 / math.sqrt(self.in_features)
+        self.weight_mu.data.uniform_(-mu_range, mu_range)
+        self.bias_mu.data.uniform_(-mu_range, mu_range)
+        self.weight_sigma.data.fill_(sigma_init / math.sqrt(self.in_features))
+        self.bias_sigma.data.fill_(sigma_init / math.sqrt(self.out_features))
+
+    def _f(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sign(x) * torch.sqrt(torch.abs(x))
+
+    def reset_noise(self) -> None:
+        eps_in = self._f(torch.randn(self.in_features, device=self.weight_mu.device))
+        eps_out = self._f(torch.randn(self.out_features, device=self.weight_mu.device))
+        self.weight_eps.copy_(torch.outer(eps_out, eps_in))
+        self.bias_eps.copy_(eps_out)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.training:
+            weight = self.weight_mu + self.weight_sigma * self.weight_eps
+            bias = self.bias_mu + self.bias_sigma * self.bias_eps
+        else:
+            weight = self.weight_mu
+            bias = self.bias_mu
+        return F.linear(x, weight, bias)
+
+
 @dataclass
 class RainbowConfig:
     dataset_path: Path
@@ -77,7 +123,7 @@ class RainbowConfig:
     epochs: int = 600
     batch_size: int = 256
     gamma: float = 0.99
-    lr: float = 2.5e-4
+    lr: float = 1.0e-4
     tau: float = 0.005
     n_atoms: int = 51
     v_min: float = -50.0
