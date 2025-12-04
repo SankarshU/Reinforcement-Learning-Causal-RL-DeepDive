@@ -374,7 +374,6 @@ def train_offline_d3qn(
 
             # Q(s, ·)
             q_all = q_net(s)                            # (B, NUM_ACTIONS)
-            q_all = q_all - q_all.mean(dim=1, keepdim=True)
 
             # Q(s,a)
             q_sa = q_all.gather(1, a.unsqueeze(1))      # (B,1)
