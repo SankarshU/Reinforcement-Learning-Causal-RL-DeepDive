@@ -80,9 +80,10 @@ class RainbowConfig:
     lr: float = 2.5e-4
     tau: float = 0.005
     n_atoms: int = 51
-    v_min: float = -10.0
-    v_max: float = 10.0
+    v_min: float = -50.0
+    v_max: float = 500.0
     eval_every: int = 50
+    eval_episodes: int = 50
 
 
 def _prepare_loader(data: OfflineDataset, batch_size: int) -> DataLoader:
@@ -219,7 +220,7 @@ def train_rainbow_offline(cfg: RainbowConfig) -> Dict[str, Any]:
 
         if (ep + 1) % cfg.eval_every == 0 or ep == 0:
             returns = evaluate_rainbow_policy(
-                q_net, data.state_mean, data.state_std, episodes=10, seed=cfg.seed
+                q_net, data.state_mean, data.state_std, episodes=cfg.eval_episodes, seed=cfg.seed
             )
             metrics.setdefault("eval_returns", []).append(
                 {"epoch": ep + 1, "mean": float(sum(returns) / len(returns))}

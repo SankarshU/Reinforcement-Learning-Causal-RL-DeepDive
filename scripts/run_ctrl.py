@@ -147,6 +147,27 @@ def train_bicogan(cfg: BiCoGANConfig) -> Path:
     trainer.train(loader)
 
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
+    eval_records = []
+    for entry in evals:
+        if isinstance(entry, dict):
+            eval_records.append(
+                {
+                    "epoch": int(entry.get("epoch", 0)),
+                    "mean": float(entry.get("mean", 0.0)),
+                    "std": float(entry.get("std", 0.0)),
+                }
+            )
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            try:
+                eval_records.append(
+                    {
+                        "epoch": len(eval_records) + 1,
+                        "mean": float(entry[0]),
+                        "std": float(entry[1]),
+                    }
+                )
+            except (TypeError, ValueError):
+                continue
     torch.save(G.state_dict(), cfg.output_dir / "G.pt")
     torch.save(E.state_dict(), cfg.output_dir / "E.pt")
     torch.save(D.state_dict(), cfg.output_dir / "D.pt")
@@ -226,7 +247,7 @@ def train_d3qn(cfg: D3QNCliConfig) -> Path:
             "cql_losses": cql,
             "q_means": qmean,
             "q_stds": qstd,
-            "eval_returns": evals,
+            "eval_returns": eval_records,
             "state_mean": S_mean.cpu().tolist(),
             "state_std": S_std.cpu().tolist(),
         },

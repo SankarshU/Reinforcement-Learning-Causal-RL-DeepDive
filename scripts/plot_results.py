@@ -95,18 +95,25 @@ def plot_d3qn(real_path: Path, cf_path: Path, out_dir: Path) -> None:
         )
         evals = data.get("eval_returns") or []
         if evals:
-            ax[1].plot(
-                [i + 1 for i, _ in enumerate(evals)],
-                [v[0] if isinstance(v, (list, tuple)) else v["mean"] for v in evals],
-                label=name,
-                marker="o",
-                color=color,
-            )
+            xs: List[float] = []
+            ys: List[float] = []
+            for i, e in enumerate(evals):
+                if isinstance(e, dict):
+                    xs.append(float(e.get("epoch", i + 1)))
+                    ys.append(float(e.get("mean", 0.0)))
+                elif isinstance(e, (list, tuple)) and len(e) >= 1:
+                    try:
+                        xs.append(float(i + 1))
+                        ys.append(float(e[0]))
+                    except (TypeError, ValueError):
+                        continue
+            if xs and ys:
+                ax[1].plot(xs, ys, label=name, marker="o", color=color)
     ax[0].set_title("D3QN losses")
     ax[0].set_xlabel("epoch")
     ax[0].legend()
     ax[1].set_title("D3QN eval mean return")
-    ax[1].set_xlabel("eval idx")
+    ax[1].set_xlabel("epoch")
     ax[1].legend()
     save_fig(fig, out_dir / "d3qn_overview.png")
 

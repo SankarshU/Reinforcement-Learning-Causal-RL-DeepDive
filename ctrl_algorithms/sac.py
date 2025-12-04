@@ -103,8 +103,9 @@ class SACConfig:
     lr: float = 3e-4
     alpha: float = 0.2
     auto_alpha: bool = True
-    target_entropy: float = -1.0
+    target_entropy: float = -0.5
     eval_every: int = 50
+    eval_episodes: int = 50
 
 
 def _prepare_loader(data: OfflineDataset, batch_size: int) -> DataLoader:
@@ -116,7 +117,7 @@ def evaluate_sac_policy(
     actor: Actor,
     state_mean: torch.Tensor,
     state_std: torch.Tensor,
-    episodes: int = 20,
+    episodes: int = 50,
     seed: int = 0,
 ) -> List[float]:
     """Evaluate SAC policy on clean CartPole-v1 using deterministic actions."""
@@ -190,11 +191,13 @@ def train_sac_offline(cfg: SACConfig) -> Dict[str, Any]:
                 q1_target, q2_target = critic_target(sp, sp_action)
                 q_target = torch.min(q1_target, q2_target) - log_alpha.exp() * sp_logp.unsqueeze(1)
                 y = r + cfg.gamma * (1.0 - d) * q_target
+                y = torch.clamp(y, -10.0, 500.0)
 
             q1, q2 = critic(s, a_cont)
             critic_loss = F.mse_loss(q1, y) + F.mse_loss(q2, y)
             critic_opt.zero_grad()
             critic_loss.backward()
+            torch.nn.utils.clip_grad_norm_(critic.parameters(), 5.0)
             critic_opt.step()
 
             new_action, logp = actor.sample(s)
@@ -203,6 +206,7 @@ def train_sac_offline(cfg: SACConfig) -> Dict[str, Any]:
             actor_loss = (log_alpha.exp() * logp - q_pi).mean()
             actor_opt.zero_grad()
             actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(actor.parameters(), 5.0)
             actor_opt.step()
 
             if cfg.auto_alpha and alpha_opt is not None:
@@ -224,7 +228,7 @@ def train_sac_offline(cfg: SACConfig) -> Dict[str, Any]:
 
         if (ep + 1) % cfg.eval_every == 0 or ep == 0:
             returns = evaluate_sac_policy(
-                actor, data.state_mean, data.state_std, episodes=10, seed=cfg.seed
+                actor, data.state_mean, data.state_std, episodes=cfg.eval_episodes, seed=cfg.seed
             )
             metrics.setdefault("eval_returns", []).append(
                 {"epoch": ep + 1, "mean": float(sum(returns) / len(returns))}
