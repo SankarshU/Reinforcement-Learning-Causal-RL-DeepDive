@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import random
 from dataclasses import asdict, dataclass
+import math
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -26,7 +27,7 @@ def _save_json(payload: Dict[str, Any], path: Path) -> None:
 
 
 class RainbowNet(nn.Module):
-    """Dueling C51 network for discrete actions."""
+    """Dueling C51 network with noisy layers for discrete actions."""
 
     def __init__(
         self,
@@ -35,6 +36,7 @@ class RainbowNet(nn.Module):
         n_atoms: int = 51,
         v_min: float = -10.0,
         v_max: float = 10.0,
+        noisy_std: float = 0.5,
     ):
         super().__init__()
         self.n_actions = n_actions
@@ -45,9 +47,9 @@ class RainbowNet(nn.Module):
 
         hidden = 256
         self.fc1 = nn.Linear(state_dim, hidden)
-        self.fc2 = nn.Linear(hidden, hidden)
-        self.adv = nn.Linear(hidden, n_actions * n_atoms)
-        self.val = nn.Linear(hidden, n_atoms)
+        self.fc2 = NoisyLinear(hidden, hidden, sigma_init=noisy_std)
+        self.adv = NoisyLinear(hidden, n_actions * n_atoms, sigma_init=noisy_std)
+        self.val = NoisyLinear(hidden, n_atoms, sigma_init=noisy_std)
 
     def _dist(self, x: torch.Tensor) -> torch.Tensor:
         h = F.relu(self.fc1(x))
@@ -69,6 +71,51 @@ class RainbowNet(nn.Module):
         return torch.sum(probs * support, dim=-1)
 
 
+class NoisyLinear(nn.Module):
+    """Factorized noisy layer with deterministic output when eval()."""
+
+    def __init__(self, in_features: int, out_features: int, sigma_init: float = 0.5):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.weight_mu = nn.Parameter(torch.empty(out_features, in_features))
+        self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features))
+        self.register_buffer("weight_eps", torch.empty(out_features, in_features))
+
+        self.bias_mu = nn.Parameter(torch.empty(out_features))
+        self.bias_sigma = nn.Parameter(torch.empty(out_features))
+        self.register_buffer("bias_eps", torch.empty(out_features))
+
+        self.reset_parameters(sigma_init)
+        self.reset_noise()
+
+    def reset_parameters(self, sigma_init: float) -> None:
+        mu_range = 1 / math.sqrt(self.in_features)
+        self.weight_mu.data.uniform_(-mu_range, mu_range)
+        self.bias_mu.data.uniform_(-mu_range, mu_range)
+        self.weight_sigma.data.fill_(sigma_init / math.sqrt(self.in_features))
+        self.bias_sigma.data.fill_(sigma_init / math.sqrt(self.out_features))
+
+    def _f(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sign(x) * torch.sqrt(torch.abs(x))
+
+    def reset_noise(self) -> None:
+        eps_in = self._f(torch.randn(self.in_features, device=self.weight_mu.device))
+        eps_out = self._f(torch.randn(self.out_features, device=self.weight_mu.device))
+        self.weight_eps.copy_(torch.outer(eps_out, eps_in))
+        self.bias_eps.copy_(eps_out)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.training:
+            weight = self.weight_mu + self.weight_sigma * self.weight_eps
+            bias = self.bias_mu + self.bias_sigma * self.bias_eps
+        else:
+            weight = self.weight_mu
+            bias = self.bias_mu
+        return F.linear(x, weight, bias)
+
+
 @dataclass
 class RainbowConfig:
     dataset_path: Path
@@ -77,12 +124,13 @@ class RainbowConfig:
     epochs: int = 600
     batch_size: int = 256
     gamma: float = 0.99
-    lr: float = 2.5e-4
+    lr: float = 1.0e-4
     tau: float = 0.005
     n_atoms: int = 51
-    v_min: float = -10.0
-    v_max: float = 10.0
+    v_min: float = -50.0
+    v_max: float = 500.0
     eval_every: int = 50
+    eval_episodes: int = 50
 
 
 def _prepare_loader(data: OfflineDataset, batch_size: int) -> DataLoader:
@@ -112,18 +160,12 @@ def _projection(
     l = l.clamp(min=0, max=n_atoms - 1)
     u = u.clamp(min=0, max=n_atoms - 1)
 
-    proj = torch.zeros_like(next_dist)
-    eq_mask = l == u
-    if eq_mask.any():
-        idx = torch.arange(batch_size, device=next_dist.device)[eq_mask]
-        proj[idx, l[eq_mask]] += next_dist[eq_mask]
-
-    neq_mask = ~eq_mask
-    if neq_mask.any():
-        idx = torch.arange(batch_size, device=next_dist.device)[neq_mask]
-        proj[idx, l[neq_mask]] += next_dist[neq_mask] * (u - b)[neq_mask]
-        proj[idx, u[neq_mask]] += next_dist[neq_mask] * (b - l)[neq_mask]
-    return proj
+    # Flattened index_add avoids advanced indexing shape issues
+    offset = torch.arange(batch_size, device=next_dist.device).unsqueeze(1) * n_atoms
+    proj = torch.zeros(batch_size * n_atoms, device=next_dist.device)
+    proj.index_add_(0, (l + offset).view(-1), (next_dist * (u - b)).view(-1))
+    proj.index_add_(0, (u + offset).view(-1), (next_dist * (b - l)).view(-1))
+    return proj.view(batch_size, n_atoms)
 
 
 def evaluate_rainbow_policy(
@@ -132,16 +174,46 @@ def evaluate_rainbow_policy(
     state_std: torch.Tensor,
     episodes: int = 20,
     seed: int = 0,
+    use_ctrl_env: bool = True,
+    action_noise_std: float = 0.0,
 ) -> List[float]:
-    """Evaluate Rainbow Q-network on clean CartPole-v1."""
-    import gymnasium as gym
-
+    """Evaluate Rainbow Q-network (default: CTRL CartPole dynamics with continuous force)."""
     q_net.eval()
     device = next(q_net.parameters()).device
     returns: List[float] = []
-    for ep in range(episodes):
+
+    if use_ctrl_env:
+        try:
+            from CTRL.ctrl_data import CTRL_CartPoleSD_CLEAN
+        except ImportError:
+            from ctrl_data import CTRL_CartPoleSD_CLEAN
+
+        env = CTRL_CartPoleSD_CLEAN(seed=seed)
+
+        def step_env(a_cont: float):
+            a_noisy = a_cont + action_noise_std * torch.randn(()).item()
+            sp_raw, r, done, trunc, _ = env.step(a_noisy)
+            return sp_raw, r, done, trunc
+
+        def reset_env(ep_seed: int):
+            return env.reset(seed=ep_seed)[0]
+
+    else:
+        import gymnasium as gym
+
         env = gym.make("CartPole-v1")
-        s_raw, _ = env.reset(seed=seed + ep)
+
+        def step_env(a_cont: float):
+            force = (2.0 * a_cont - 1.0) * 10.0
+            a_bin = 1 if force > 0 else 0
+            sp_raw, r, done, trunc, _ = env.step(a_bin)
+            return sp_raw, r, done, trunc
+
+        def reset_env(ep_seed: int):
+            return env.reset(seed=ep_seed)[0]
+
+    for ep in range(episodes):
+        s_raw = reset_env(seed + ep)
         s = torch.tensor(s_raw, dtype=torch.float32, device=device)
         s = (s - state_mean[0].to(device)) / state_std[0].to(device)
         done = False
@@ -152,14 +224,12 @@ def evaluate_rainbow_policy(
                 q_vals = q_net(s.unsqueeze(0))
                 a_idx = q_vals.argmax(dim=1).item()
             a_cont = a_idx / 10.0
-            force = (2.0 * a_cont - 1.0) * 10.0
-            a_bin = 1 if force > 0 else 0
-            sp_raw, r, done, trunc, _ = env.step(a_bin)
+            sp_raw, r, done, trunc = step_env(a_cont)
             total_r += float(r)
             s = torch.tensor(sp_raw, dtype=torch.float32, device=device)
             s = (s - state_mean[0].to(device)) / state_std[0].to(device)
         returns.append(total_r)
-        env.close()
+    env.close()
     return returns
 
 
@@ -225,7 +295,13 @@ def train_rainbow_offline(cfg: RainbowConfig) -> Dict[str, Any]:
 
         if (ep + 1) % cfg.eval_every == 0 or ep == 0:
             returns = evaluate_rainbow_policy(
-                q_net, data.state_mean, data.state_std, episodes=10, seed=cfg.seed
+                q_net,
+                data.state_mean,
+                data.state_std,
+                episodes=cfg.eval_episodes,
+                seed=cfg.seed,
+                use_ctrl_env=True,
+                action_noise_std=0.0,
             )
             metrics.setdefault("eval_returns", []).append(
                 {"epoch": ep + 1, "mean": float(sum(returns) / len(returns))}

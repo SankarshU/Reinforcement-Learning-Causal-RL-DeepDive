@@ -242,11 +242,11 @@ class D3QNHyperParams:
     epochs: int = 1000
     gamma: float = 0.99
     batch_size: int = 512
-    lr: float = 1.5e-4
+    lr: float = 1.0e-4
     tau: float = 0.005                 # target update rate
-    alpha_cql: float = 0.02            # CQL weight
+    alpha_cql: float = 0.05            # CQL weight
     reward_clip: Optional[float] = None
-    target_clip: Optional[float] = 20.0
+    target_clip: Optional[float] = 500.0
     max_grad_norm: Optional[float] = 1.0
 
 class QNetCTRL(nn.Module):
@@ -316,7 +316,7 @@ def train_offline_d3qn(
     print(f"\n========== OFFLINE D3QN TRAINING: {label} ==========")
 
     N, state_dim = S.shape
-    valist = []
+    eval_history = []
 
     # Move to device
     S  = S.to(device).float()
@@ -374,7 +374,6 @@ def train_offline_d3qn(
 
             # Q(s, ·)
             q_all = q_net(s)                            # (B, NUM_ACTIONS)
-            q_all = q_all - q_all.mean(dim=1, keepdim=True)
 
             # Q(s,a)
             q_sa = q_all.gather(1, a.unsqueeze(1))      # (B,1)
@@ -439,14 +438,24 @@ def train_offline_d3qn(
                 f"Qmean={Q_means[-1]:.3f} | Qstd={Q_stds[-1]:.3f}"
             )
 
-            eval_returns = evaluate_policy(q_net, S_mean, S_std, episodes=20)
+            eval_returns = evaluate_policy(
+                q_net,
+                S_mean,
+                S_std,
+                episodes=50,
+                use_ctrl_env=True,
+                action_noise_std=0.0,
+            )
             print(
                 f"   ▶ Eval Return Mean = {eval_returns.mean():.2f}, "
                 f"Std = {eval_returns.std():.2f}"
             )
-            valist.append(
-                (np.round(eval_returns.mean(), 3),
-                 np.round(eval_returns.std(), 3))
+            eval_history.append(
+                {
+                    "epoch": ep + 1,
+                    "mean": float(np.round(eval_returns.mean(), 3)),
+                    "std": float(np.round(eval_returns.std(), 3)),
+                }
             )
 
-    return q_net, total_losses, td_losses, cql_losses, Q_means, Q_stds, valist
+    return q_net, total_losses, td_losses, cql_losses, Q_means, Q_stds, eval_history
