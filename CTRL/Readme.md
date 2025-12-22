@@ -170,6 +170,8 @@ Includes:
 
 ---
 
+## 10.Detailed Report
+https://github.com/SankarshU/Reinforcement-Learning-Causal-RL-DeepDive/blob/51febc81d4bd30aa8ef0b0a9a43f98d24d2d67d0/CTRL/CTRL_Report.pdf
 ## 10. Citation
 
 ```
